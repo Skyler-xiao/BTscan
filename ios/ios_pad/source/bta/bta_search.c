@@ -17,6 +17,7 @@
 
 #include <imports.h>
 #include "controllers.h"
+#include "scan.h"
 
 #define PRO_CONTROLLER_NAME "Nintendo RVL-CNT-01-UC"
 
@@ -26,8 +27,31 @@ void bta_search_callback(uint8_t event, void *p_data)
     DEBUG_PRINT("bta_search_callback called %u %p\n", event, p_data);
 
     switch (event) {
+    case BTA_DM_INQ_RES_EVT: {
+        if (scanIsEnabled()) {
+            const tBTA_DM_INQ_RES* inq = (const tBTA_DM_INQ_RES*) p_data;
+            scanOnInquiryResult(inq);
+
+            // devices other than peripherals are only recorded,
+            // the original callback should only ever see controllers
+            if ((inq->dev_class[1] & BTM_COD_MAJOR_CLASS_MASK) != BTM_COD_MAJOR_PERIPHERAL) {
+                return;
+            }
+        }
+        break;
+    }
     case BTA_DM_DISC_RES_EVT: {
         tBTA_DM_DISC_RES* res = (tBTA_DM_DISC_RES*) p_data;
+
+        if (scanIsEnabled()) {
+            scanOnName(res->bd_addr, res->bd_name);
+
+            // known non-peripheral devices are not passed on
+            if (scanDeviceKind(res->bd_addr) == 0) {
+                return;
+            }
+        }
+
         if (res->result == 0 && !isOfficialName((const char*) res->bd_name)) {
             DEBUG_PRINT("%s is non official, replacing name...\n", res->bd_name);
             // replace device name
@@ -49,6 +73,15 @@ void BTA_DmSearch_hook(tBTA_DM_INQ *p_dm_inq, uint32_t services, void *p_cback)
 {
     DEBUG_PRINT("BTA_DmSearch_hook %ds (%s)\n", p_dm_inq->duration,
         (current_inq_mode == BTM_LIMITED_INQUIRY) ? "BTM_LIMITED_INQUIRY" : "BTM_GENERAL_INQUIRY");
+
+    if (scanIsEnabled()) {
+        // scan mode: look for every discoverable device, not only controllers
+        p_dm_inq->mode = BTM_GENERAL_INQUIRY;
+        p_dm_inq->filter_type = BTM_CLR_INQUIRY_FILTER;
+        p_dm_inq->max_resps = 0;
+        real_BTA_DmSearch(p_dm_inq, services, p_cback);
+        return;
+    }
 
     // switch between limited and general inquiry to make sure all devices are covered
     p_dm_inq->mode = current_inq_mode;

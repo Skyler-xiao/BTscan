@@ -77,7 +77,7 @@ int _main()
     kernel_memcpy((void*) PAD_PHYS_CODE_BASE + payloads->size + 0x2a, padscore_addr + 0x2940, 0x900);
 
     // memset ios-pad bss
-    kernel_memset((void *) PAD_PHYS_BSS_BASE, 0, 0x3000);
+    kernel_memset((void *) PAD_PHYS_BSS_BASE, 0, 0x8000);
 
     // apply ios_pad patches
     run_ios_pad_patches();

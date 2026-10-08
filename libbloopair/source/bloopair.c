@@ -483,3 +483,38 @@ IOSError Bloopair_GetDefaultCustomConfiguration(IOSHandle handle, BloopairContro
 
     return _Bloopair_GetCustomConfiguration(handle, controllerType, WPAD_CHAN_0, outCustom, outSize);
 }
+
+IOSError Bloopair_SetScanMode(IOSHandle handle, BOOL enabled, BOOL clearResults)
+{
+    BtrmIoctlv* ioctlv = allocBtrmIoctlv(BLOOPAIR_LIB, BLOOPAIR_FUNC_SET_SCAN_MODE);
+    if (!ioctlv) {
+        return IOS_ERROR_FAILALLOC;
+    }
+
+    BloopairScanModeData* request = (BloopairScanModeData*) ioctlv->request.data;
+    request->enabled = enabled ? 1 : 0;
+    request->clear = clearResults ? 1 : 0;
+
+    IOSError res = executeBtrmIoctlv(handle, ioctlv);
+
+    freeBtrmIoctlv(ioctlv);
+
+    return res;
+}
+
+IOSError Bloopair_GetScanResults(IOSHandle handle, BloopairScanResults* outResults)
+{
+    BtrmIoctlv* ioctlv = allocBtrmIoctlv(BLOOPAIR_LIB, BLOOPAIR_FUNC_GET_SCAN_RESULTS);
+    if (!ioctlv) {
+        return IOS_ERROR_FAILALLOC;
+    }
+
+    IOSError res = executeBtrmIoctlv(handle, ioctlv);
+    if (res >= 0) {
+        memcpy(outResults, ioctlv->response.data, sizeof(*outResults));
+    }
+
+    freeBtrmIoctlv(ioctlv);
+
+    return res;
+}

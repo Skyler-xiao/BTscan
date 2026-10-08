@@ -417,6 +417,39 @@ IOSError Bloopair_GetCustomConfiguration(IOSHandle handle, WPADChan chan, void* 
  */
 IOSError Bloopair_GetDefaultCustomConfiguration(IOSHandle handle, BloopairControllerType controllerType, void* outCustom, uint32_t* outSize);
 
+/**
+ * Enable or disable the Bluetooth device scan.
+ * While enabled, pressing the sync button on the console lists all
+ * discoverable Bluetooth devices (not only controllers).
+ *
+ * \param handle
+ * A handle obtained by \link Bloopair_Open \endlink.
+ *
+ * \param enabled
+ * TRUE to enable the scan mode.
+ *
+ * \param clearResults
+ * TRUE to clear the list of already found devices.
+ *
+ * \return
+ * \c IOS_ERROR_OK on success.
+ */
+IOSError Bloopair_SetScanMode(IOSHandle handle, BOOL enabled, BOOL clearResults);
+
+/**
+ * Read the list of devices found while the scan mode was enabled.
+ *
+ * \param handle
+ * A handle obtained by \link Bloopair_Open \endlink.
+ *
+ * \param outResults
+ * A pointer to store the results to.
+ *
+ * \return
+ * \c IOS_ERROR_OK on success.
+ */
+IOSError Bloopair_GetScanResults(IOSHandle handle, BloopairScanResults* outResults);
+
 #ifdef __cplusplus
 }
 #endif

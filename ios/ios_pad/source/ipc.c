@@ -18,6 +18,7 @@
 #include "ipc.h"
 #include "info_store.h"
 #include "controllers.h"
+#include "scan.h"
 #include <bloopair/ipc.h>
 
 static int bloopairFunc(BtrmRequest* request, BtrmResponse* response)
@@ -325,6 +326,22 @@ static int bloopairFunc(BtrmRequest* request, BtrmResponse* response)
 
         memcpy(response->data, customConfiguration, customSize);
         return customSize;
+    }
+
+    case BLOOPAIR_FUNC_SET_SCAN_MODE: {
+        DEBUG_PRINT("BLOOPAIR_FUNC_SET_SCAN_MODE\n");
+
+        BloopairScanModeData* data = (BloopairScanModeData*) request->data;
+        scanSetMode(data->enabled, data->clear);
+        return 0;
+    }
+
+    case BLOOPAIR_FUNC_GET_SCAN_RESULTS: {
+        DEBUG_PRINT("BLOOPAIR_FUNC_GET_SCAN_RESULTS\n");
+
+        BloopairScanResults* results = (BloopairScanResults*) response->data;
+        scanGetResults(results);
+        return sizeof(*results);
     }
 
     }
