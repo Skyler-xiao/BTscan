@@ -518,3 +518,37 @@ IOSError Bloopair_GetScanResults(IOSHandle handle, BloopairScanResults* outResul
 
     return res;
 }
+
+IOSError Bloopair_ArmAudioTest(IOSHandle handle, BOOL enabled)
+{
+    BtrmIoctlv* ioctlv = allocBtrmIoctlv(BLOOPAIR_LIB, BLOOPAIR_FUNC_AUDIO_TEST_ARM);
+    if (!ioctlv) {
+        return IOS_ERROR_FAILALLOC;
+    }
+
+    BloopairAudioTestData* request = (BloopairAudioTestData*) ioctlv->request.data;
+    request->enabled = enabled ? 1 : 0;
+
+    IOSError res = executeBtrmIoctlv(handle, ioctlv);
+
+    freeBtrmIoctlv(ioctlv);
+
+    return res;
+}
+
+IOSError Bloopair_GetAudioStatus(IOSHandle handle, BloopairAudioStatus* outStatus)
+{
+    BtrmIoctlv* ioctlv = allocBtrmIoctlv(BLOOPAIR_LIB, BLOOPAIR_FUNC_AUDIO_TEST_GET_STATUS);
+    if (!ioctlv) {
+        return IOS_ERROR_FAILALLOC;
+    }
+
+    IOSError res = executeBtrmIoctlv(handle, ioctlv);
+    if (res >= 0) {
+        memcpy(outStatus, ioctlv->response.data, sizeof(*outStatus));
+    }
+
+    freeBtrmIoctlv(ioctlv);
+
+    return res;
+}

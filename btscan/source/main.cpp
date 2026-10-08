@@ -56,7 +56,116 @@ static std::string formatEntry(const BloopairScanEntry& e)
     return line;
 }
 
-static void writeResultsFile(const BloopairScanResults& results)
+static const char* audioStateName(uint8_t state)
+{
+    switch (state) {
+    case BLOOPAIR_AUDIO_STATE_IDLE:        return "idle";
+    case BLOOPAIR_AUDIO_STATE_ARMED:       return "armed (waiting for the SYNC search to finish)";
+    case BLOOPAIR_AUDIO_STATE_CONNECTING:  return "connecting";
+    case BLOOPAIR_AUDIO_STATE_CONFIGURING: return "configuring channel";
+    case BLOOPAIR_AUDIO_STATE_OPEN:        return "channel open";
+    case BLOOPAIR_AUDIO_STATE_DONE:        return "DONE - got an answer from the device";
+    case BLOOPAIR_AUDIO_STATE_FAILED:      return "FAILED";
+    case BLOOPAIR_AUDIO_STATE_CLOSED:      return "closed";
+    default:                               return "?";
+    }
+}
+
+static std::string describeAudioEvent(const BloopairAudioLogEntry& e)
+{
+    char buf[160];
+    unsigned v = e.value;
+    unsigned d = e.data;
+
+    switch (e.event) {
+    case BLOOPAIR_AUDIO_EV_NO_TARGET:
+        return "no audio device found in the scan results";
+    case BLOOPAIR_AUDIO_EV_TARGET:
+        snprintf(buf, sizeof(buf), "target %02X:%02X:%02X:%02X:%02X:%02X",
+            v >> 8, v & 0xFF, d >> 24, (d >> 16) & 0xFF, (d >> 8) & 0xFF, d & 0xFF);
+        return buf;
+    case BLOOPAIR_AUDIO_EV_SECURITY:
+        snprintf(buf, sizeof(buf), "BTM_SetSecurityLevel returned %u", d);
+        return buf;
+    case BLOOPAIR_AUDIO_EV_L2CAP_REGISTER:
+        snprintf(buf, sizeof(buf), "L2CAP psm registered: 0x%04X (0 = failed)", v);
+        return buf;
+    case BLOOPAIR_AUDIO_EV_CONNECT_REQ:
+        snprintf(buf, sizeof(buf), "connect request sent, channel 0x%04X (0 = failed)", v);
+        return buf;
+    case BLOOPAIR_AUDIO_EV_CONNECT_CFM:
+        snprintf(buf, sizeof(buf), "connect confirm: channel 0x%04X result 0x%04X (0 = ok)", v, d);
+        return buf;
+    case BLOOPAIR_AUDIO_EV_CONFIG_REQ:
+        snprintf(buf, sizeof(buf), "config request sent, channel 0x%04X, returned %u", v, d);
+        return buf;
+    case BLOOPAIR_AUDIO_EV_CONFIG_IND:
+        snprintf(buf, sizeof(buf), "device sent its config, mtu %u", d);
+        return buf;
+    case BLOOPAIR_AUDIO_EV_CONFIG_CFM:
+        snprintf(buf, sizeof(buf), "config confirm: result 0x%04X (0 = ok)", d);
+        return buf;
+    case BLOOPAIR_AUDIO_EV_CHANNEL_OPEN:
+        return "AVDTP channel is open";
+    case BLOOPAIR_AUDIO_EV_DISCOVER_SENT:
+        snprintf(buf, sizeof(buf), "AVDTP discover sent, write result %u", d);
+        return buf;
+    case BLOOPAIR_AUDIO_EV_DATA_IND:
+        snprintf(buf, sizeof(buf), "received %u bytes from the device", d);
+        return buf;
+    case BLOOPAIR_AUDIO_EV_DISCONNECT_REQ:
+        return "closing the channel";
+    case BLOOPAIR_AUDIO_EV_DISCONNECT_IND:
+        snprintf(buf, sizeof(buf), "channel closed by the stack (ack needed: %u)", d);
+        return buf;
+    case BLOOPAIR_AUDIO_EV_DISCONNECT_CFM:
+        snprintf(buf, sizeof(buf), "disconnect confirm, result 0x%04X", d);
+        return buf;
+    case BLOOPAIR_AUDIO_EV_CONNECT_IND:
+        snprintf(buf, sizeof(buf), "unexpected incoming connection, psm 0x%04X", v);
+        return buf;
+    case BLOOPAIR_AUDIO_EV_NO_BUFFER:
+        return "no buffer available";
+    default:
+        snprintf(buf, sizeof(buf), "event %u value %u data %u", (unsigned) e.event, v, d);
+        return buf;
+    }
+}
+
+// decode the answer to the AVDTP discover command
+static std::string describeAvdtpResponse(const BloopairAudioStatus& st)
+{
+    std::string out;
+    char buf[128];
+
+    out += "AVDTP answer (hex):";
+    uint32_t shown = st.responseLength < BLOOPAIR_AUDIO_RESP_SIZE ? st.responseLength : BLOOPAIR_AUDIO_RESP_SIZE;
+    for (uint32_t i = 0; i < shown; i++) {
+        snprintf(buf, sizeof(buf), " %02X", st.response[i]);
+        out += buf;
+    }
+
+    if (st.responseLength >= 2) {
+        uint8_t msgType = st.response[0] & 3;
+        if (msgType == 2) {
+            out += "\n  -> accepted";
+            for (uint32_t i = 2; i + 1 < shown; i += 2) {
+                snprintf(buf, sizeof(buf), "\n  stream endpoint %u: %s %s, %s",
+                    st.response[i] >> 2,
+                    (st.response[i + 1] >> 4) == 0 ? "audio" : "other media",
+                    ((st.response[i + 1] >> 3) & 1) ? "sink" : "source",
+                    ((st.response[i] >> 1) & 1) ? "in use" : "free");
+                out += buf;
+            }
+        } else if (msgType == 3) {
+            out += "\n  -> rejected by the device";
+        }
+    }
+
+    return out;
+}
+
+static void writeResultsFile(const BloopairScanResults& results, const std::string& audioText)
 {
     mkdir(OUTPUT_DIR, 0777);
 
@@ -70,6 +179,10 @@ static void writeResultsFile(const BloopairScanResults& results)
         fprintf(f, "%s\n", formatEntry(results.entries[i]).c_str());
     }
 
+    if (!audioText.empty()) {
+        fprintf(f, "\nAudio connection test:\n%s\n", audioText.c_str());
+    }
+
     fclose(f);
 }
 
@@ -81,7 +194,7 @@ int main(int argc, char** argv)
     // padscore has to be initialized for the sync button to work
     KPADInit();
 
-    WHBLogPrintf("BtScan 0.1.0 - Bluetooth device scan");
+    WHBLogPrintf("BtScan 0.2.0 - Bluetooth scan and audio connection test");
     WHBLogPrintf("");
 
     IOSHandle handle = Bloopair_Open();
@@ -92,15 +205,20 @@ int main(int argc, char** argv)
         WHBLogPrintf("and restart the console.");
     } else {
         IOSError res = Bloopair_SetScanMode(handle, TRUE, TRUE);
+        if (res >= 0) {
+            res = Bloopair_ArmAudioTest(handle, TRUE);
+        }
+
         if (res < 0) {
-            WHBLogPrintf("Failed to enable scan mode (%d)", (int) res);
+            WHBLogPrintf("Failed to enable the test (%d)", (int) res);
             WHBLogPrintf("Is this the build with the audio extension?");
             active = false;
         } else {
             WHBLogPrintf("1) Put your headphones into pairing mode");
-            WHBLogPrintf("2) Press the SYNC button on the console");
-            WHBLogPrintf("3) Wait a few seconds, found devices show up below");
-            WHBLogPrintf("Press HOME to quit. Results are saved to:");
+            WHBLogPrintf("2) Press the SYNC button on the console ONCE");
+            WHBLogPrintf("3) Wait. After the search the console pairs and");
+            WHBLogPrintf("   connects to the first audio device found.");
+            WHBLogPrintf("Press HOME to quit. Everything is also saved to:");
             WHBLogPrintf("  %s", OUTPUT_FILE);
             WHBLogPrintf("");
         }
@@ -109,11 +227,22 @@ int main(int argc, char** argv)
     BloopairScanResults shown;
     memset(&shown, 0, sizeof(shown));
 
+    BloopairScanResults results;
+    memset(&results, 0, sizeof(results));
+
+    BloopairAudioStatus audio;
+    memset(&audio, 0, sizeof(audio));
+
+    uint32_t shownLogCount = 0;
+    uint8_t shownState = 0xFF;
+    bool shownResponse = false;
+    std::string audioText;
+
     while (WHBProcIsRunning()) {
         if (active) {
-            BloopairScanResults results;
+            bool changed = false;
+
             if (Bloopair_GetScanResults(handle, &results) >= 0) {
-                bool changed = false;
                 for (uint32_t i = 0; i < results.count && i < BLOOPAIR_SCAN_MAX_RESULTS; i++) {
                     const BloopairScanEntry& cur = results.entries[i];
                     bool isNew = i >= shown.count;
@@ -124,10 +253,36 @@ int main(int argc, char** argv)
                     }
                 }
 
-                if (changed) {
-                    writeResultsFile(results);
-                    shown = results;
+                shown = results;
+            }
+
+            if (Bloopair_GetAudioStatus(handle, &audio) >= 0) {
+                for (uint32_t i = shownLogCount; i < audio.logCount && i < BLOOPAIR_AUDIO_LOG_SIZE; i++) {
+                    std::string line = describeAudioEvent(audio.log[i]);
+                    WHBLogPrintf("[audio] %s", line.c_str());
+                    audioText += line + "\n";
+                    changed = true;
                 }
+                shownLogCount = audio.logCount;
+
+                if (audio.state != shownState) {
+                    shownState = audio.state;
+                    WHBLogPrintf("[audio] state: %s", audioStateName(audio.state));
+                    audioText += std::string("state: ") + audioStateName(audio.state) + "\n";
+                    changed = true;
+                }
+
+                if (!shownResponse && audio.responseLength > 0) {
+                    shownResponse = true;
+                    std::string response = describeAvdtpResponse(audio);
+                    WHBLogPrintf("%s", response.c_str());
+                    audioText += response + "\n";
+                    changed = true;
+                }
+            }
+
+            if (changed) {
+                writeResultsFile(results, audioText);
             }
         }
 
@@ -138,6 +293,7 @@ int main(int argc, char** argv)
     if (handle >= 0) {
         if (active) {
             // restore normal controller-only behaviour
+            Bloopair_ArmAudioTest(handle, FALSE);
             Bloopair_SetScanMode(handle, FALSE, FALSE);
         }
         Bloopair_Close(handle);

@@ -145,3 +145,18 @@ void scanGetResults(BloopairScanResults* out)
 {
     memcpy(out, &scanResults, sizeof(scanResults));
 }
+
+#define MAJOR_CLASS_AUDIO_VIDEO 4
+
+int scanFindFirstAudio(uint8_t* out)
+{
+    for (uint32_t i = 0; i < scanResults.count; i++) {
+        BloopairScanEntry* entry = &scanResults.entries[i];
+        if ((entry->dev_class[1] & BTM_COD_MAJOR_CLASS_MASK) == MAJOR_CLASS_AUDIO_VIDEO) {
+            memcpy(out, entry->bd_address, 6);
+            return 1;
+        }
+    }
+
+    return 0;
+}

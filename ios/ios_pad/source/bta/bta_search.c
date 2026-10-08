@@ -18,6 +18,7 @@
 #include <imports.h>
 #include "controllers.h"
 #include "scan.h"
+#include "audio.h"
 
 #define PRO_CONTROLLER_NAME "Nintendo RVL-CNT-01-UC"
 
@@ -62,6 +63,9 @@ void bta_search_callback(uint8_t event, void *p_data)
     default:
         break;
     }
+
+    // lets the audio test start its connection once the search is over
+    audioOnSearchEvent(event);
 
     real_bta_search_callback(event, p_data);
 }

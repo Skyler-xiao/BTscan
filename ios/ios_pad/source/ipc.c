@@ -19,6 +19,7 @@
 #include "info_store.h"
 #include "controllers.h"
 #include "scan.h"
+#include "audio.h"
 #include <bloopair/ipc.h>
 
 static int bloopairFunc(BtrmRequest* request, BtrmResponse* response)
@@ -342,6 +343,20 @@ static int bloopairFunc(BtrmRequest* request, BtrmResponse* response)
         BloopairScanResults* results = (BloopairScanResults*) response->data;
         scanGetResults(results);
         return sizeof(*results);
+    }
+
+    case BLOOPAIR_FUNC_AUDIO_TEST_ARM: {
+        DEBUG_PRINT("BLOOPAIR_FUNC_AUDIO_TEST_ARM\n");
+
+        BloopairAudioTestData* data = (BloopairAudioTestData*) request->data;
+        audioArmTest(data->enabled);
+        return 0;
+    }
+
+    case BLOOPAIR_FUNC_AUDIO_TEST_GET_STATUS: {
+        BloopairAudioStatus* audioStatus = (BloopairAudioStatus*) response->data;
+        audioGetStatus(audioStatus);
+        return sizeof(*audioStatus);
     }
 
     }

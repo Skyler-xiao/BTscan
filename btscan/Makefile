@@ -16,7 +16,7 @@ TOPDIR ?= $(CURDIR)
 APP_NAME		:=	BtScan
 APP_SHORTNAME		:=	BtScan
 APP_AUTHOR		:=	Bloopair audio extension
-APP_VERSION		:=	0.1.0
+APP_VERSION		:=	0.2.0
 
 include $(DEVKITPRO)/wut/share/wut_rules
 

@@ -35,6 +35,8 @@
 #define BLOOPAIR_FUNC_GET_CUSTOM_CONFIGURATION      11
 #define BLOOPAIR_FUNC_SET_SCAN_MODE                 12
 #define BLOOPAIR_FUNC_GET_SCAN_RESULTS              13
+#define BLOOPAIR_FUNC_AUDIO_TEST_ARM                14
+#define BLOOPAIR_FUNC_AUDIO_TEST_GET_STATUS         15
 
 #define BLOOPAIR_VERSION_MAJOR(v) (((v) >> 16) & 0xff)
 #define BLOOPAIR_VERSION_MINOR(v) (((v) >> 8) & 0xff)
@@ -118,3 +120,60 @@ typedef struct __attribute__ ((__packed__)) {
     uint8_t count;
     BloopairScanEntry entries[BLOOPAIR_SCAN_MAX_RESULTS];
 } BloopairScanResults;
+
+// Bluetooth audio connection test (audio extension)
+#define BLOOPAIR_AUDIO_LOG_SIZE     32
+#define BLOOPAIR_AUDIO_RESP_SIZE    48
+
+// states of the audio connection test
+#define BLOOPAIR_AUDIO_STATE_IDLE           0
+#define BLOOPAIR_AUDIO_STATE_ARMED          1   // waiting for the next search to finish
+#define BLOOPAIR_AUDIO_STATE_CONNECTING     2
+#define BLOOPAIR_AUDIO_STATE_CONFIGURING    3
+#define BLOOPAIR_AUDIO_STATE_OPEN           4
+#define BLOOPAIR_AUDIO_STATE_DONE           5   // got an answer to the AVDTP discover command
+#define BLOOPAIR_AUDIO_STATE_FAILED         6
+#define BLOOPAIR_AUDIO_STATE_CLOSED         7
+
+// events in the audio test log
+#define BLOOPAIR_AUDIO_EV_NO_TARGET         1   // no audio device in the scan results
+#define BLOOPAIR_AUDIO_EV_TARGET            2   // value: first two address bytes, data: last four
+#define BLOOPAIR_AUDIO_EV_SECURITY          3   // data: result of BTM_SetSecurityLevel
+#define BLOOPAIR_AUDIO_EV_L2CAP_REGISTER    4   // value: registered psm (0 = failed)
+#define BLOOPAIR_AUDIO_EV_CONNECT_REQ       5   // value: channel id (0 = failed)
+#define BLOOPAIR_AUDIO_EV_CONNECT_CFM       6   // value: channel id, data: result
+#define BLOOPAIR_AUDIO_EV_CONFIG_REQ        7   // value: channel id, data: result
+#define BLOOPAIR_AUDIO_EV_CONFIG_IND        8   // value: channel id, data: remote mtu
+#define BLOOPAIR_AUDIO_EV_CONFIG_CFM        9   // value: channel id, data: result
+#define BLOOPAIR_AUDIO_EV_CHANNEL_OPEN      10  // value: channel id
+#define BLOOPAIR_AUDIO_EV_DISCOVER_SENT     11  // data: result of L2CA_DataWrite
+#define BLOOPAIR_AUDIO_EV_DATA_IND          12  // value: channel id, data: length
+#define BLOOPAIR_AUDIO_EV_DISCONNECT_REQ    13  // value: channel id
+#define BLOOPAIR_AUDIO_EV_DISCONNECT_IND    14  // value: channel id, data: ack needed
+#define BLOOPAIR_AUDIO_EV_DISCONNECT_CFM    15  // value: channel id, data: result
+#define BLOOPAIR_AUDIO_EV_CONNECT_IND       16  // unexpected incoming connection, value: psm
+#define BLOOPAIR_AUDIO_EV_NO_BUFFER         17
+
+// structure associated with BLOOPAIR_FUNC_AUDIO_TEST_ARM
+typedef struct __attribute__ ((__packed__)) {
+    uint8_t enabled;
+} BloopairAudioTestData;
+
+typedef struct __attribute__ ((__packed__)) {
+    uint16_t event;
+    uint16_t value;
+    uint32_t data;
+} BloopairAudioLogEntry;
+
+// structure associated with BLOOPAIR_FUNC_AUDIO_TEST_GET_STATUS
+typedef struct __attribute__ ((__packed__)) {
+    uint8_t enabled;
+    uint8_t state;
+    uint16_t cid;
+    uint8_t bd_address[6];
+    uint16_t responseLength;                        // length of the AVDTP answer
+    uint8_t response[BLOOPAIR_AUDIO_RESP_SIZE];     // first bytes of the AVDTP answer
+    uint8_t logCount;
+    uint8_t reserved;
+    BloopairAudioLogEntry log[BLOOPAIR_AUDIO_LOG_SIZE];
+} BloopairAudioStatus;

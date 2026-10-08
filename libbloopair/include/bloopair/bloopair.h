@@ -450,6 +450,36 @@ IOSError Bloopair_SetScanMode(IOSHandle handle, BOOL enabled, BOOL clearResults)
  */
 IOSError Bloopair_GetScanResults(IOSHandle handle, BloopairScanResults* outResults);
 
+/**
+ * Arm or disarm the audio connection test.
+ * While armed, the next finished device search (sync button) tries to connect
+ * to the first audio device found by the scan.
+ *
+ * \param handle
+ * A handle obtained by \link Bloopair_Open \endlink.
+ *
+ * \param enabled
+ * TRUE to arm the test (this also clears the previous status).
+ *
+ * \return
+ * \c IOS_ERROR_OK on success.
+ */
+IOSError Bloopair_ArmAudioTest(IOSHandle handle, BOOL enabled);
+
+/**
+ * Read the status and event log of the audio connection test.
+ *
+ * \param handle
+ * A handle obtained by \link Bloopair_Open \endlink.
+ *
+ * \param outStatus
+ * A pointer to store the status to.
+ *
+ * \return
+ * \c IOS_ERROR_OK on success.
+ */
+IOSError Bloopair_GetAudioStatus(IOSHandle handle, BloopairAudioStatus* outStatus);
+
 #ifdef __cplusplus
 }
 #endif

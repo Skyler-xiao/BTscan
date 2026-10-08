@@ -31,3 +31,6 @@ int scanDeviceKind(const uint8_t* bd_addr);
 
 // copy the current results
 void scanGetResults(BloopairScanResults* out);
+
+// copies the address of the first audio/video device (headphones etc.) to out, returns 1 if found
+int scanFindFirstAudio(uint8_t* out);
