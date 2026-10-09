@@ -67,6 +67,7 @@ static const char* audioStateName(uint8_t state)
     case BLOOPAIR_AUDIO_STATE_DONE:        return "DONE - got an answer from the device";
     case BLOOPAIR_AUDIO_STATE_FAILED:      return "FAILED";
     case BLOOPAIR_AUDIO_STATE_CLOSED:      return "closed";
+    case BLOOPAIR_AUDIO_STATE_PAIRING:     return "pairing";
     default:                               return "?";
     }
 }
@@ -126,6 +127,34 @@ static std::string describeAudioEvent(const BloopairAudioLogEntry& e)
         return buf;
     case BLOOPAIR_AUDIO_EV_NO_BUFFER:
         return "no buffer available";
+    case BLOOPAIR_AUDIO_EV_PAIRABLE:
+        return "pairing enabled";
+    case BLOOPAIR_AUDIO_EV_BOND_REQ:
+        snprintf(buf, sizeof(buf), "pairing started, returned %u (0 = already paired, 1 = started)", d);
+        return buf;
+    case BLOOPAIR_AUDIO_EV_SEC_EVENT: {
+        const char* name = "other";
+        switch (v) {
+        case 2:  name = "PIN requested (legacy pairing)"; break;
+        case 3:  name = "authentication complete"; break;
+        case 4:  name = "authorization request"; break;
+        case 5:  name = "link up"; break;
+        case 6:  name = "link down"; break;
+        case 10: name = "confirm request (simple pairing)"; break;
+        case 11: name = "passkey notification"; break;
+        }
+        if (v == 10) {
+            snprintf(buf, sizeof(buf), "security event %u: %s, just works %u, local io %u, remote io %u, remote auth req %u",
+                v, name, d >> 24, (d >> 16) & 0xFF, (d >> 8) & 0xFF, d & 0xFF);
+        } else {
+            snprintf(buf, sizeof(buf), "security event %u: %s (info 0x%X)", v, name, d);
+        }
+        return buf;
+    }
+    case BLOOPAIR_AUDIO_EV_AUTH_CMPL:
+        snprintf(buf, sizeof(buf), "pairing result: success %u, fail reason 0x%02X, key received %u",
+            v, d & 0xFF, (d >> 8) & 1);
+        return buf;
     default:
         snprintf(buf, sizeof(buf), "event %u value %u data %u", (unsigned) e.event, v, d);
         return buf;

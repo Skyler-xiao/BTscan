@@ -28,6 +28,8 @@ extern uint8_t L2CA_ConfigRsp(uint16_t cid, void* p_cfg);
 extern uint8_t L2CA_DataWrite(uint16_t cid, BT_HDR* p_data);
 extern uint8_t L2CA_DisconnectReq(uint16_t cid);
 extern uint8_t L2CA_DisconnectRsp(uint16_t cid);
+extern void BTM_SetPairableMode(uint8_t allow_pairing, uint8_t connect_only_paired);
+extern uint8_t BTM_SecBond(uint8_t* p_bd_addr, uint8_t pin_len, uint8_t* p_pin, uint32_t* trusted_mask);
 extern uint8_t BTM_SetSecurityLevel(uint8_t is_originator, const char* p_name, uint8_t service_id,
                                     uint16_t sec_level, uint16_t psm, uint32_t mx_proto_id, uint32_t mx_chan_id);
 
@@ -40,6 +42,21 @@ typedef struct {
 #define CFG_MTU_PRESENT(c)      ((c)->raw[0x02])
 #define CFG_MTU(c)              (*(volatile uint16_t*) &(c)->raw[0x04])
 #define CFG_FLUSH_PRESENT(c)    ((c)->raw[0x20])
+
+// security events of the Bluetooth application layer (BTA_DM_SP_CFM_REQ_EVT is in bt_api.h)
+#define BTA_DM_AUTH_CMPL_EVT    3
+#define BTA_DM_LINK_DOWN_EVT    6
+
+// start of tBTA_DM_AUTH_CMPL (layout confirmed in the IOS-PAD binary)
+typedef struct {
+    BD_ADDR bd_addr;
+    BD_NAME bd_name;
+    uint8_t key_present;
+    LINK_KEY key;
+    uint8_t key_type;
+    uint8_t success;
+    uint8_t fail_reason;
+} AuthCmpl;
 
 // tL2CAP_APPL_INFO, same layout the HID host registers
 typedef struct {
@@ -230,19 +247,9 @@ static const L2capApplInfo applInfo = {
     NULL,
 };
 
-static void startConnect(void)
+// open the L2CAP channel on the AVDTP psm (the device has to be paired already)
+static void connectL2cap(void)
 {
-    uint8_t addr[6];
-    if (!scanFindFirstAudio(addr)) {
-        logEvent(BLOOPAIR_AUDIO_EV_NO_TARGET, 0, 0);
-        fail();
-        return;
-    }
-
-    memcpy(status.bd_address, addr, 6);
-    logEvent(BLOOPAIR_AUDIO_EV_TARGET, (addr[0] << 8) | addr[1],
-        (addr[2] << 24) | (addr[3] << 16) | (addr[4] << 8) | addr[5]);
-
     // tell the security manager how to treat connections to the AVDTP psm
     uint8_t secRes = BTM_SetSecurityLevel(1, "AVDTP", AVDTP_SEC_SERVICE_ID,
         BTM_SEC_OUT_AUTHENTICATE | BTM_SEC_OUT_ENCRYPT, AVDTP_PSM, 0, 0);
@@ -266,6 +273,37 @@ static void startConnect(void)
     if (cid == 0) {
         fail();
     }
+}
+
+static void startConnect(void)
+{
+    uint8_t addr[6];
+    if (!scanFindFirstAudio(addr)) {
+        logEvent(BLOOPAIR_AUDIO_EV_NO_TARGET, 0, 0);
+        fail();
+        return;
+    }
+
+    memcpy(status.bd_address, addr, 6);
+    logEvent(BLOOPAIR_AUDIO_EV_TARGET, (addr[0] << 8) | addr[1],
+        (addr[2] << 24) | (addr[3] << 16) | (addr[4] << 8) | addr[5]);
+
+    // make sure the stack accepts pairing, then pair like a phone would (dedicated bonding)
+    BTM_SetPairableMode(1, 0);
+    logEvent(BLOOPAIR_AUDIO_EV_PAIRABLE, 0, 0);
+
+    status.state = BLOOPAIR_AUDIO_STATE_PAIRING;
+    uint8_t bondRes = BTM_SecBond(status.bd_address, 0, NULL, NULL);
+    logEvent(BLOOPAIR_AUDIO_EV_BOND_REQ, 0, bondRes);
+
+    if (bondRes == 0) {
+        // already paired
+        connectL2cap();
+    } else if (bondRes != 1) {
+        fail();
+    }
+
+    // otherwise wait for the pairing result, see audioOnSecurityEvent
 }
 
 void audioArmTest(uint8_t enabled)
@@ -299,4 +337,47 @@ void audioOnSearchEvent(uint8_t event)
     }
 
     startConnect();
+}
+
+int audioOnSecurityEvent(uint8_t event, void* p_data)
+{
+    if (status.state < BLOOPAIR_AUDIO_STATE_CONNECTING && status.state != BLOOPAIR_AUDIO_STATE_PAIRING) {
+        return 0;
+    }
+
+    if (status.state == BLOOPAIR_AUDIO_STATE_FAILED || status.state == BLOOPAIR_AUDIO_STATE_CLOSED) {
+        return 0;
+    }
+
+    uint32_t info = 0;
+    if (event == BTA_DM_SP_CFM_REQ_EVT) {
+        const tBTA_DM_SP_CFM_REQ* req = (const tBTA_DM_SP_CFM_REQ*) p_data;
+        info = (req->just_works << 24) | (req->loc_io_caps << 16) | (req->rmt_io_caps << 8) | req->rmt_auth_req;
+    } else if (event == BTA_DM_LINK_DOWN_EVT) {
+        info = ((const uint8_t*) p_data)[6];
+    }
+
+    logEvent(BLOOPAIR_AUDIO_EV_SEC_EVENT, event, info);
+
+    if (event != BTA_DM_AUTH_CMPL_EVT) {
+        return 0;
+    }
+
+    const AuthCmpl* auth = (const AuthCmpl*) p_data;
+    if (memcmp(auth->bd_addr, status.bd_address, 6) != 0) {
+        return 0;
+    }
+
+    logEvent(BLOOPAIR_AUDIO_EV_AUTH_CMPL, auth->success, auth->fail_reason | (auth->key_present << 8));
+
+    if (status.state == BLOOPAIR_AUDIO_STATE_PAIRING) {
+        if (auth->success) {
+            connectL2cap();
+        } else {
+            fail();
+        }
+    }
+
+    // this pairing was started by us, the original code should not see it
+    return 1;
 }

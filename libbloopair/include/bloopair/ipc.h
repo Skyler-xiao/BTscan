@@ -134,6 +134,7 @@ typedef struct __attribute__ ((__packed__)) {
 #define BLOOPAIR_AUDIO_STATE_DONE           5   // got an answer to the AVDTP discover command
 #define BLOOPAIR_AUDIO_STATE_FAILED         6
 #define BLOOPAIR_AUDIO_STATE_CLOSED         7
+#define BLOOPAIR_AUDIO_STATE_PAIRING        8
 
 // events in the audio test log
 #define BLOOPAIR_AUDIO_EV_NO_TARGET         1   // no audio device in the scan results
@@ -153,6 +154,10 @@ typedef struct __attribute__ ((__packed__)) {
 #define BLOOPAIR_AUDIO_EV_DISCONNECT_CFM    15  // value: channel id, data: result
 #define BLOOPAIR_AUDIO_EV_CONNECT_IND       16  // unexpected incoming connection, value: psm
 #define BLOOPAIR_AUDIO_EV_NO_BUFFER         17
+#define BLOOPAIR_AUDIO_EV_BOND_REQ          18  // data: result of BTM_SecBond (0 = already paired, 1 = started)
+#define BLOOPAIR_AUDIO_EV_SEC_EVENT         19  // value: security event id, data: extra info
+#define BLOOPAIR_AUDIO_EV_AUTH_CMPL         20  // value: success, data: fail reason | key present << 8
+#define BLOOPAIR_AUDIO_EV_PAIRABLE          21  // pairing was enabled
 
 // structure associated with BLOOPAIR_FUNC_AUDIO_TEST_ARM
 typedef struct __attribute__ ((__packed__)) {

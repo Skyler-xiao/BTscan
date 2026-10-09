@@ -17,6 +17,7 @@
 
 #include <imports.h>
 #include <bt_api.h>
+#include "audio.h"
 
 void BTA_DmConfirm(uint8_t* bd_addr, uint8_t accept)
 {
@@ -36,6 +37,9 @@ void bta_sec_callback(uint8_t event, void *p_data)
 {
     DEBUG_PRINT("bta_sec_callback called %u %p\n", event, p_data);
 
+    // the audio test logs pairing progress and takes over its own pairing events
+    int swallow = audioOnSecurityEvent(event, p_data);
+
     switch (event) {
     case BTA_DM_SP_CFM_REQ_EVT: {
         tBTA_DM_SP_CFM_REQ* req_data = (tBTA_DM_SP_CFM_REQ*) p_data;
@@ -45,6 +49,10 @@ void bta_sec_callback(uint8_t event, void *p_data)
     }
     default:
         break;
+    }
+
+    if (swallow) {
+        return;
     }
 
     real_bta_sec_callback(event, p_data);

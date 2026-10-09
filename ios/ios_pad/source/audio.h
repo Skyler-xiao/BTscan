@@ -21,3 +21,7 @@ void audioGetStatus(BloopairAudioStatus* out);
 
 // called from the search callback (Bluetooth stack context) for every search event
 void audioOnSearchEvent(uint8_t event);
+
+// called for every security event of the Bluetooth stack (pairing etc.).
+// returns 1 if the event belongs to the audio test and must not be passed on
+int audioOnSecurityEvent(uint8_t event, void* p_data);
