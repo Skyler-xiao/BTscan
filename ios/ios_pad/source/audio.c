@@ -47,6 +47,12 @@ typedef struct {
 #define BTA_DM_AUTH_CMPL_EVT    3
 #define BTA_DM_LINK_DOWN_EVT    6
 
+#define BTA_DM_LINK_UP_EVT      5
+
+// state of the security manager (addresses derived from the IOS-PAD binary)
+#define BTM_PAIRING_DISABLED    (*(volatile uint8_t*) 0x1214fe79)
+#define BTM_PAIRING_STATE       (*(volatile uint8_t*) 0x1214fe8f)
+
 // start of tBTA_DM_AUTH_CMPL (layout confirmed in the IOS-PAD binary)
 typedef struct {
     BD_ADDR bd_addr;
@@ -358,6 +364,17 @@ int audioOnSecurityEvent(uint8_t event, void* p_data)
     }
 
     logEvent(BLOOPAIR_AUDIO_EV_SEC_EVENT, event, info);
+
+    if (event == BTA_DM_LINK_UP_EVT || event == BTA_DM_AUTH_CMPL_EVT) {
+        logEvent(BLOOPAIR_AUDIO_EV_BTM_STATE, (BTM_PAIRING_DISABLED << 8) | BTM_PAIRING_STATE, event);
+    }
+
+    if (event == BTA_DM_LINK_UP_EVT && status.state == BLOOPAIR_AUDIO_STATE_PAIRING) {
+        // the console switches pairing off again when the search ends, make sure it is on
+        // now that the link is up and the pairing is about to begin
+        BTM_SetPairableMode(1, 0);
+        logEvent(BLOOPAIR_AUDIO_EV_PAIRABLE, 1, 0);
+    }
 
     if (event != BTA_DM_AUTH_CMPL_EVT) {
         return 0;

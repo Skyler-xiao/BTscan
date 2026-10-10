@@ -128,7 +128,11 @@ static std::string describeAudioEvent(const BloopairAudioLogEntry& e)
     case BLOOPAIR_AUDIO_EV_NO_BUFFER:
         return "no buffer available";
     case BLOOPAIR_AUDIO_EV_PAIRABLE:
-        return "pairing enabled";
+        return v ? "pairing switched on again after the link came up" : "pairing enabled";
+    case BLOOPAIR_AUDIO_EV_BTM_STATE:
+        snprintf(buf, sizeof(buf), "security manager at event %u: pairing disabled = %u, pairing state = %u",
+            d, v >> 8, v & 0xFF);
+        return buf;
     case BLOOPAIR_AUDIO_EV_BOND_REQ:
         snprintf(buf, sizeof(buf), "pairing started, returned %u (0 = already paired, 1 = started)", d);
         return buf;

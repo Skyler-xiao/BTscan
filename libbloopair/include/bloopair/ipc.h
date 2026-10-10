@@ -158,6 +158,7 @@ typedef struct __attribute__ ((__packed__)) {
 #define BLOOPAIR_AUDIO_EV_SEC_EVENT         19  // value: security event id, data: extra info
 #define BLOOPAIR_AUDIO_EV_AUTH_CMPL         20  // value: success, data: fail reason | key present << 8
 #define BLOOPAIR_AUDIO_EV_PAIRABLE          21  // pairing was enabled
+#define BLOOPAIR_AUDIO_EV_BTM_STATE         22  // value: pairing disabled << 8 | pairing state, data: security event id
 
 // structure associated with BLOOPAIR_FUNC_AUDIO_TEST_ARM
 typedef struct __attribute__ ((__packed__)) {
